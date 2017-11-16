@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
+#include <math.h>
 
 
 #define DEBUG 1
@@ -11,6 +13,35 @@
 
 #undef DEBUG
 #define DEBUG 0
+
+#ifdef _WIN32
+    #define PATH_SEPARATOR '\\'
+#elif __linux__
+    #define PATH_SEPARATOR '/'
+#endif
+
+
+
+// Gets the name of the source file
+char* getFileName(char *file_name_wpath)
+{
+    int length = strlen(file_name_wpath);
+    int index = length - 1;
+    while(index >= 0 && file_name_wpath[index] != PATH_SEPARATOR)
+        index--;
+
+    char *file_name = (char*)malloc((length - index + 1) * sizeof(char));
+    int i = index + 1, j = 0;
+
+    // Copy the filename into the filename variable
+    for(;i < length;)
+        file_name[j++] = file_name_wpath[i++];
+
+    file_name[j] = 0; // Add '\0' to the end of the string
+    return file_name;
+}
+
+char *file_name;
 
 /*
  * A: Input  matrix of size x*y
@@ -52,7 +83,7 @@ void *calculateRow(void *param) {
 	int row = ((int*)param)[0]; // row to be calculated
     int i, j;
     for(i = 0;i < y;i++) {
-        int sum = 0
+        int sum = 0;
         for(j = 0; j < z; j++) {
             sum += A[row][j] * B[j][i];
         }
@@ -89,7 +120,7 @@ int threadedMatMultPerElement() {
 	int i = 0, j = 0;
 	for(i = 0;i < x;i++) {
 		for(j= 0;j < z;j++) {
-			int *rowcol = malloc(2 * sizeof(int));
+			int *rowcol = (int*)malloc(2 * sizeof(int));
 			rowcol[0] = i;
 			rowcol[1] = j;
 			pthread_t tid;
@@ -110,7 +141,7 @@ int threadedMatMultPerElement() {
 int threadedMatMultPerRow() {
 	int i = 0;
 	for(i = 0;i < x;i++) {
-		int *row = malloc(sizeof(int));
+		int *row = (int*)malloc(sizeof(int));
 		row[0] = i;
 		pthread_t tid;
 		pthread_attr_t attr;
@@ -122,11 +153,28 @@ int threadedMatMultPerRow() {
 }
 
 int **createArray(int rows, int cols) {
-	int **arr = malloc(rows * sizeof(int*));
+	int **arr = (int**)malloc(rows * sizeof(int*));
 	int i;
 	for(i = 0;i < rows;i++)
-		arr[i] = malloc(cols * sizeof(int));
+		arr[i] = (int*)malloc(cols * sizeof(int));
 	return arr;
+}
+
+int **createRandomArray(int rows, int cols) {
+    int **arr = createArray(rows, cols);
+    int i, j;
+    for(i = 0; i < rows; i++)
+        for(j = 0;j < cols; j++)
+            arr[i][j] = rand() % 10;
+    return arr;
+}
+
+void freeArray(int **arr, int rows) {
+    int i;
+    for(i = 0; i < rows; i++)
+        free(arr[i]);
+
+    free(arr);
 }
 
 void printArray(int **arr, int rows, int cols) {
@@ -141,25 +189,45 @@ void printArray(int **arr, int rows, int cols) {
 }
 
 int main() {
-	x = 3, y = 2, z = 3;
-	int arr[] = {1, 2, 3, 4, 5, 6};
-	A = createArray(x, y);
-	B = createArray(y, z);
-
-	int i, j;
-	for(i = 0;i < x;i++)
-		for(j = 0;j < y;j++)
-			A[i][j] = arr[i * y + j];
-
-	for(i = 0;i < y;i++)
-		for(j = 0;j < z;j++)
-			B[i][j] = arr[i * z + j];
-
-	printArray(A, x, y);
-	printArray(B, y, z);
-
-	C = createArray(x, z);
-	int num_threads = threadedMatMultPerElement();
-	printArray(C, x, z);
-	printf("\n\nNumber of threads created: %d\n\n", num_threads);
+	FILE *fp = fopen("benchmark.txt", "w");
+	int n = 1;
+	x = y = z = n;
+	double startTime, endTime, timeElapsed;
+	time_t t;
+	srand((unsigned int)t);
+	file_name = getFileName(__FILE__);
+	int i;
+	for(i = 0;i < 10;i++) {
+		n = 2 * n;		
+		x = y = z = n;
+		A = createRandomArray(n, n);
+		B = createRandomArray(n, n);
+		C = createArray(n, n);
+		printf("Number of elements: %d\n", n * n);
+		startTime = (float)clock()/CLOCKS_PER_SEC;
+		int num_threads = nonThreadedMatMult();
+		endTime = (float)clock()/CLOCKS_PER_SEC;
+		double timeElapsed1 = endTime - startTime;
+		//printArray(C, n, n);
+		printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed1);
+		startTime = (float)clock()/CLOCKS_PER_SEC;
+		num_threads = threadedMatMultPerElement();
+		endTime = (float)clock()/CLOCKS_PER_SEC;
+		double timeElapsed2 = endTime - startTime;
+		//printArray(C, n, n);
+		printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed2);
+		startTime = (float)clock()/CLOCKS_PER_SEC;
+		num_threads = threadedMatMultPerRow();
+		endTime = (float)clock()/CLOCKS_PER_SEC;
+		double timeElapsed3 = endTime - startTime;
+		//printArray(C, n, n);
+		printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed3);
+		printf("============================================================================================\n");
+		fprintf(fp, "%d,%.8lf,%.8lf,%0.8f\n", n, timeElapsed1, timeElapsed2, timeElapsed3);
+	}
+    freeArray(A, n);
+    freeArray(B, n);
+    freeArray(C, n);
+    fclose(fp);
+	return 0;
 }
