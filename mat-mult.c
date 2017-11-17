@@ -2,11 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <time.h>
 #include <math.h>
+
 
 
 #define DEBUG 1
 
+#define get_file_name(varname) #varname".txt"
 #define debug_print(fmt, ...) \
         do { if (DEBUG) fprintf(stderr, "%s:%d:%s():"fmt, file_name, \
                                 __LINE__, __func__, __VA_ARGS__); } while (0)
@@ -188,46 +191,116 @@ void printArray(int **arr, int rows, int cols) {
 	printf("\n");
 }
 
-int main() {
-	FILE *fp = fopen("benchmark.txt", "w");
-	int n = 1;
-	x = y = z = n;
-	double startTime, endTime, timeElapsed;
-	time_t t;
-	srand((unsigned int)t);
-	file_name = getFileName(__FILE__);
-	int i;
-	for(i = 0;i < 10;i++) {
-		n = 2 * n;		
-		x = y = z = n;
-		A = createRandomArray(n, n);
-		B = createRandomArray(n, n);
-		C = createArray(n, n);
-		printf("Number of elements: %d\n", n * n);
-		startTime = (float)clock()/CLOCKS_PER_SEC;
-		int num_threads = nonThreadedMatMult();
-		endTime = (float)clock()/CLOCKS_PER_SEC;
-		double timeElapsed1 = endTime - startTime;
-		//printArray(C, n, n);
-		printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed1);
-		startTime = (float)clock()/CLOCKS_PER_SEC;
-		num_threads = threadedMatMultPerElement();
-		endTime = (float)clock()/CLOCKS_PER_SEC;
-		double timeElapsed2 = endTime - startTime;
-		//printArray(C, n, n);
-		printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed2);
-		startTime = (float)clock()/CLOCKS_PER_SEC;
-		num_threads = threadedMatMultPerRow();
-		endTime = (float)clock()/CLOCKS_PER_SEC;
-		double timeElapsed3 = endTime - startTime;
-		//printArray(C, n, n);
-		printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed3);
-		printf("============================================================================================\n");
-		fprintf(fp, "%d,%.8lf,%.8lf,%0.8f\n", n, timeElapsed1, timeElapsed2, timeElapsed3);
+int **readArrayFromFile(const char *fname, int *rows_in, int *cols_in) {
+	FILE *fp = fopen(fname, "r");
+
+	int rows = 0, cols = 0;
+	char c;
+	do {
+		c = fgetc(fp);
+		if(c == ' ' && rows == 0) {
+			cols++;
+			continue;
+		}
+		if(c == '\n') {
+			if(rows == 0)
+				cols++;
+			*cols_in = cols;
+			rows++;
+			continue;
+		}
+		if(c == EOF)
+			break;
+	}while(1);
+	rewind(fp);
+	*rows_in = rows;
+
+	int **arr = createArray(rows, cols);
+	rows = cols = 0;
+	do {
+		c = fgetc(fp);
+		if(c == ' ' && rows == 0) {
+			cols++;
+			continue;
+		}
+		if(c == '\n') {
+			cols = 0;
+			rows++;
+			continue;
+		}
+		if(c == EOF)
+			break;
+		arr[rows][cols] = c - '0';
+	}while(1);
+	return arr;
+}
+
+void printArrayToFile(int **arr, int rows, int cols, char *name) {
+	FILE *fp = fopen(name, "w");
+	int i, j;
+	for(i = 0;i < rows;i++) {
+		for(j = 0;j < cols;j++)
+			fprintf(fp, "%d ", arr[i][j]);
+		printf("\n");
 	}
-    freeArray(A, n);
-    freeArray(B, n);
-    freeArray(C, n);
-    fclose(fp);
+}
+
+int main(int argc, char *argv[]) {
+	A = B = C = NULL;
+	if(argc > 2) {
+		int y_copy;
+		A = readArrayFromFile(argv[1], &x, &y);
+		B = readArrayFromFile(argv[2], &y_copy, &z);
+		 if(y_copy != y) {
+			printf("x = %d\ty = %d\ty_copy = %d\tz = %d\n", x, y, y_copy, z);
+		 	printf("Cannot multiply the 2 matrices");
+		 	exit(0);
+		 }
+		return 0;
+	}
+	else {
+		FILE *fp = fopen("benchmark.txt", "w");
+		int n = 1;
+		x = y = z = n;
+		double startTime, endTime, timeElapsed;
+		time_t t;
+		srand((unsigned int)t);
+		file_name = getFileName(__FILE__);
+		int i;
+
+		for(i = 0;i < 5;i++) {
+			n = 2 * n;		
+			x = y = z = n;
+			A = createRandomArray(n, n);
+			B = createRandomArray(n, n);
+			C = createArray(n, n);
+			printf("Number of elements: %d\n", n * n);
+			startTime = (float)clock()/CLOCKS_PER_SEC;
+			int num_threads = nonThreadedMatMult();
+			endTime = (float)clock()/CLOCKS_PER_SEC;
+			double timeElapsed1 = endTime - startTime;
+			//printArray(C, n, n);
+			printArrayToFile(C, n, n, get_file_name(C));
+			printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed1);
+			startTime = (float)clock()/CLOCKS_PER_SEC;
+			num_threads = threadedMatMultPerElement();
+			endTime = (float)clock()/CLOCKS_PER_SEC;
+			double timeElapsed2 = endTime - startTime;
+			//printArray(C, n, n);
+			printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed2);
+			startTime = (float)clock()/CLOCKS_PER_SEC;
+			num_threads = threadedMatMultPerRow();
+			endTime = (float)clock()/CLOCKS_PER_SEC;
+			double timeElapsed3 = endTime - startTime;
+			//printArray(C, n, n);
+			printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed3);
+			printf("============================================================================================\n");
+			fprintf(fp, "%d,%.8lf,%.8lf,%0.8f\n", n, timeElapsed1, timeElapsed2, timeElapsed3);
+		}
+		freeArray(A, n);
+		freeArray(B, n);
+		freeArray(C, n);
+		fclose(fp);
+	}
 	return 0;
 }
