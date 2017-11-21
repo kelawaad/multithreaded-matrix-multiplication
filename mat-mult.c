@@ -252,7 +252,8 @@ int main(int argc, char *argv[]) {
 	funcs[0] = nonThreadedMatMult;
 	funcs[1] = threadedMatMultPerElement;
 	funcs[2] = threadedMatMultPerRow; 
-	if(argc > 2) {
+	printf("pid = %d\n", getpid());
+	if(argc > 2 && strcmp(argv[1], "-b") != 0) {
 		int y_copy;
 		A = readArrayFromFile(argv[1], &x, &y);
 		B = readArrayFromFile(argv[2], &y_copy, &z);
@@ -283,6 +284,17 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	else {
+		int iterations;
+		if(argc > 2 && strcmp("-b", argv[1]) == 0)
+			iterations = atoi(argv[2]);
+		else if(argc == 1)
+			iterations = 5;
+		else
+		{
+			printf("Incorrect usage!\n");
+			return 0;
+		}
+		
 		FILE *fp = fopen("benchmark.txt", "w");
 		int n = 1;
 		x = y = z = n;
@@ -292,7 +304,7 @@ int main(int argc, char *argv[]) {
 		file_name = getFileName(__FILE__);
 		int i;
 
-		for(i = 0;i < 5;i++) {
+		for(i = 0;i < iterations;i++) {
 			n = 2 * n;		
 			x = y = z = n;
 			A = createRandomArray(n, n);
@@ -303,20 +315,16 @@ int main(int argc, char *argv[]) {
 			int num_threads = nonThreadedMatMult();
 			endTime = (float)clock()/CLOCKS_PER_SEC;
 			double timeElapsed1 = endTime - startTime;
-			//printArray(C, n, n);
-			
 			printf("Number of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed1);
 			startTime = (float)clock()/CLOCKS_PER_SEC;
 			num_threads = threadedMatMultPerElement();
 			endTime = (float)clock()/CLOCKS_PER_SEC;
 			double timeElapsed2 = endTime - startTime;
-			//printArray(C, n, n);
 			printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed2);
 			startTime = (float)clock()/CLOCKS_PER_SEC;
 			num_threads = threadedMatMultPerRow();
 			endTime = (float)clock()/CLOCKS_PER_SEC;
 			double timeElapsed3 = endTime - startTime;
-			//printArray(C, n, n);
 			printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed3);
 			printf("============================================================================================\n");
 			fprintf(fp, "%d,%.8lf,%.8lf,%0.8f\n", n, timeElapsed1, timeElapsed2, timeElapsed3);
