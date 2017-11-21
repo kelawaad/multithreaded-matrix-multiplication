@@ -4,7 +4,7 @@ f = open("benchmark.txt", "r")
 s = f.readline()
 arr = [[], [], [], []]
 while s != "":
-	nums = s.split(',');
+	nums = s.split(',')
 	for i in range(4):
 		arr[i].append(float(nums[i]))
 

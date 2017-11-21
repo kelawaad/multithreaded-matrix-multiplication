@@ -23,7 +23,7 @@
     #define PATH_SEPARATOR '/'
 #endif
 
-
+typedef int (*fp)(void);
 
 // Gets the name of the source file
 char* getFileName(char *file_name_wpath)
@@ -51,7 +51,7 @@ char *file_name;
  * B: Input  matrix of size y*z
  * C: Output matrix of size x*z
  */
-int **A, **B, **C;
+double **A, **B, **C;
 int x, y, z;
 
 /*
@@ -65,15 +65,16 @@ void *calculateElement(void *param) {
 
 	debug_print("row = %d\tcol = %d\n", row, col);
 
-	int sum = 0, i, j;
+	int i, j;
+	double sum = 0;
 	for(i = 0; i < y;i++)
 	{
-		int mul = A[row][i] * B[i][col];
-		debug_print("A[%d][%d] * B[%d][%d] = %d\n", row, i, i, col, mul);
+		double mul = A[row][i] * B[i][col];
+		debug_print("A[%d][%d] * B[%d][%d] = %lf\n", row, i, i, col, mul);
 		sum += mul;
 	}
 	C[row][col] = sum;
-	debug_print("sum = %d\n", sum);
+	debug_print("sum = %lf\n", sum);
 	pthread_exit(0);
 }
 
@@ -84,12 +85,13 @@ void *calculateElement(void *param) {
  */
 void *calculateRow(void *param) {
 	int row = ((int*)param)[0]; // row to be calculated
-    int i, j;
-    for(i = 0;i < y;i++) {
-        int sum = 0;
-        for(j = 0; j < z; j++) {
+	int i, j;
+
+    for(i = 0;i < z;i++) {
+        double sum = 0;
+        for(j = 0; j < y; j++) {
             sum += A[row][j] * B[j][i];
-        }
+		}
         C[row][i] = sum;
     }
     pthread_exit(0);
@@ -100,7 +102,7 @@ void *calculateRow(void *param) {
  * that runs in O(N^3)
  */
 int nonThreadedMatMult() {
-	int sum = 0;
+	double sum = 0;
 	int i, j, k;
 	for(i = 0;i < x;i++) {
 		for(j = 0;j < z;j++) {
@@ -155,16 +157,16 @@ int threadedMatMultPerRow() {
 	return x;
 }
 
-int **createArray(int rows, int cols) {
-	int **arr = (int**)malloc(rows * sizeof(int*));
+double **createArray(int rows, int cols) {
+	double **arr = (double**)malloc(rows * sizeof(double*));
 	int i;
 	for(i = 0;i < rows;i++)
-		arr[i] = (int*)malloc(cols * sizeof(int));
+		arr[i] = (double*)malloc(cols * sizeof(double));
 	return arr;
 }
 
-int **createRandomArray(int rows, int cols) {
-    int **arr = createArray(rows, cols);
+double **createRandomArray(int rows, int cols) {
+    double **arr = createArray(rows, cols);
     int i, j;
     for(i = 0; i < rows; i++)
         for(j = 0;j < cols; j++)
@@ -172,26 +174,25 @@ int **createRandomArray(int rows, int cols) {
     return arr;
 }
 
-void freeArray(int **arr, int rows) {
+void freeArray(double **arr, int rows) {
     int i;
     for(i = 0; i < rows; i++)
         free(arr[i]);
-
     free(arr);
 }
 
-void printArray(int **arr, int rows, int cols) {
+void printArray(double **arr, int rows, int cols) {
 	int i, j;
 	for(i = 0;i < rows;i++) {
 		for(j = 0;j < cols;j++) {
-			printf("%d ", arr[i][j]);
+			printf("%.2lf ", arr[i][j]);
 		}
 		printf("\n");
 	}
 	printf("\n");
 }
 
-int **readArrayFromFile(const char *fname, int *rows_in, int *cols_in) {
+double **readArrayFromFile(const char *fname, int *rows_in, int *cols_in) {
 	FILE *fp = fopen(fname, "r");
 
 	int rows = 0, cols = 0;
@@ -215,11 +216,12 @@ int **readArrayFromFile(const char *fname, int *rows_in, int *cols_in) {
 	rewind(fp);
 	*rows_in = rows;
 
-	int **arr = createArray(rows, cols);
+	double **arr = createArray(rows, cols);
 	rows = cols = 0;
 	do {
+		fscanf(fp, "%lf", &arr[rows][cols]);
 		c = fgetc(fp);
-		if(c == ' ' && rows == 0) {
+		if(c == ' ') {
 			cols++;
 			continue;
 		}
@@ -230,32 +232,54 @@ int **readArrayFromFile(const char *fname, int *rows_in, int *cols_in) {
 		}
 		if(c == EOF)
 			break;
-		arr[rows][cols] = c - '0';
 	}while(1);
 	return arr;
 }
 
-void printArrayToFile(int **arr, int rows, int cols, char *name) {
+void printArrayToFile(double **arr, int rows, int cols, char *name) {
 	FILE *fp = fopen(name, "w");
 	int i, j;
 	for(i = 0;i < rows;i++) {
 		for(j = 0;j < cols;j++)
-			fprintf(fp, "%d ", arr[i][j]);
-		printf("\n");
+			fprintf(fp, "%.5lf ", arr[i][j]);
+		fprintf(fp, "\n");
 	}
 }
 
 int main(int argc, char *argv[]) {
 	A = B = C = NULL;
+	fp funcs[3];
+	funcs[0] = nonThreadedMatMult;
+	funcs[1] = threadedMatMultPerElement;
+	funcs[2] = threadedMatMultPerRow; 
 	if(argc > 2) {
 		int y_copy;
 		A = readArrayFromFile(argv[1], &x, &y);
 		B = readArrayFromFile(argv[2], &y_copy, &z);
-		 if(y_copy != y) {
+		debug_print("x = %d\ty = %d\tz = %d\n", x, y, z);
+		if(y_copy != y) {
 			printf("x = %d\ty = %d\ty_copy = %d\tz = %d\n", x, y, y_copy, z);
 		 	printf("Cannot multiply the 2 matrices");
 		 	exit(0);
-		 }
+		}
+		
+		int choice;
+		printf("Which type of function do you wish to apply:\n1- Non threaded\n2- Thread per element\n3- Thread per row\n");
+		scanf("%d", &choice);
+		double startTime, endTime, timeElapsed;
+		int num_threads;
+		time_t t;
+		C = createArray(x, z);
+		startTime = (float)clock()/CLOCKS_PER_SEC;
+		num_threads = funcs[choice - 1]();
+		endTime = (float)clock()/CLOCKS_PER_SEC;
+		printf("\n");
+		printArray(C, x, z);
+		printf("\n");
+		printf("Time elapsed: %.6lf secs\n", endTime - startTime);
+		printf("Number of threads created: %d\n", num_threads);
+		printArrayToFile(C, x, z, get_file_name(C));
+		
 		return 0;
 	}
 	else {
@@ -274,14 +298,14 @@ int main(int argc, char *argv[]) {
 			A = createRandomArray(n, n);
 			B = createRandomArray(n, n);
 			C = createArray(n, n);
-			printf("Number of elements: %d\n", n * n);
+			printf("Number of elements: %d\n\n", n * n);
 			startTime = (float)clock()/CLOCKS_PER_SEC;
 			int num_threads = nonThreadedMatMult();
 			endTime = (float)clock()/CLOCKS_PER_SEC;
 			double timeElapsed1 = endTime - startTime;
 			//printArray(C, n, n);
-			printArrayToFile(C, n, n, get_file_name(C));
-			printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed1);
+			
+			printf("Number of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed1);
 			startTime = (float)clock()/CLOCKS_PER_SEC;
 			num_threads = threadedMatMultPerElement();
 			endTime = (float)clock()/CLOCKS_PER_SEC;
