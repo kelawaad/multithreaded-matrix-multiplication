@@ -6,7 +6,7 @@
 #include <math.h>
 
 
-
+// Used for debugging purposes
 #define DEBUG 1
 
 #define get_file_name(varname) #varname".txt"
@@ -23,6 +23,9 @@
     #define PATH_SEPARATOR '/'
 #endif
 
+int flag = 0;
+
+// Define a pointer to function named fp
 typedef int (*fp)(void);
 
 // Gets the name of the source file
@@ -157,6 +160,9 @@ int threadedMatMultPerRow() {
 	return x;
 }
 
+/*
+ * Creates and returns a matrix of dimensions rows * cols
+ */ 
 double **createArray(int rows, int cols) {
 	double **arr = (double**)malloc(rows * sizeof(double*));
 	int i;
@@ -165,6 +171,10 @@ double **createArray(int rows, int cols) {
 	return arr;
 }
 
+/*
+ * Creates and returns a matrix of dimensions rows * cols
+ * filled with random elements
+ */ 
 double **createRandomArray(int rows, int cols) {
     double **arr = createArray(rows, cols);
     int i, j;
@@ -174,13 +184,21 @@ double **createRandomArray(int rows, int cols) {
     return arr;
 }
 
+/*
+ * Used to free a matrix that "rows" rows
+ */
 void freeArray(double **arr, int rows) {
+	if(arr == NULL)
+		return;
     int i;
     for(i = 0; i < rows; i++)
         free(arr[i]);
     free(arr);
 }
 
+/*
+ * Prints a matrix of size rows * cols
+ */ 
 void printArray(double **arr, int rows, int cols) {
 	int i, j;
 	for(i = 0;i < rows;i++) {
@@ -192,40 +210,65 @@ void printArray(double **arr, int rows, int cols) {
 	printf("\n");
 }
 
+/*
+ * Reads and returns a matrix from a file, given by fname
+ * returns the number of rows and columns as well.
+ */
 double **readArrayFromFile(const char *fname, int *rows_in, int *cols_in) {
 	FILE *fp = fopen(fname, "r");
 
 	int rows = 0, cols = 0;
 	char c;
+	// Get the dimensions of the matrix
 	do {
 		c = fgetc(fp);
 		if(c == ' ' && rows == 0) {
 			cols++;
 			continue;
 		}
-		if(c == '\n') {
+		// If end of row
+		if(c == 13) {
+			do{
+				c=fgetc(fp);
+			}while(c == '\r');
+			ungetc(c, fp);
 			if(rows == 0)
 				cols++;
 			*cols_in = cols;
 			rows++;
 			continue;
 		}
-		if(c == EOF)
+		// If end of file
+		if(c == EOF) {
+			rows++;
 			break;
+		}
 	}while(1);
+	// rewind the pointer to the beginning of the file
 	rewind(fp);
 	*rows_in = rows;
 
+	printf("rows = %d\tcols = %d", rows, cols);
+
+	// Create a matrix
 	double **arr = createArray(rows, cols);
 	rows = cols = 0;
+	// fill in the matrix
 	do {
 		fscanf(fp, "%lf", &arr[rows][cols]);
+		
 		c = fgetc(fp);
+		//if(flag==0)
+		//printf("rows = %d cols = %d c = %d\n",rows, cols, c);
 		if(c == ' ') {
 			cols++;
 			continue;
 		}
-		if(c == '\n') {
+		if(c == '\r') {
+			do{
+				c=fgetc(fp);
+			}while(c == '\r');
+			ungetc(c, fp);
 			cols = 0;
 			rows++;
 			continue;
@@ -236,7 +279,10 @@ double **readArrayFromFile(const char *fname, int *rows_in, int *cols_in) {
 	return arr;
 }
 
-void printArrayToFile(double **arr, int rows, int cols, char *name) {
+/*
+ * Prints a 2-D matrix of size rows * cols to a file
+ */ 
+void printArrayToFile(double **arr, int rows, int cols, const char *name) {
 	FILE *fp = fopen(name, "w");
 	int i, j;
 	for(i = 0;i < rows;i++) {
@@ -248,16 +294,27 @@ void printArrayToFile(double **arr, int rows, int cols, char *name) {
 
 int main(int argc, char *argv[]) {
 	A = B = C = NULL;
+
+	// An array of pointers to function
 	fp funcs[3];
 	funcs[0] = nonThreadedMatMult;
 	funcs[1] = threadedMatMultPerElement;
 	funcs[2] = threadedMatMultPerRow; 
-	printf("pid = %d\n", getpid());
-	if(argc > 2 && strcmp(argv[1], "-b") != 0) {
+	
+	if(argc > 2 && strcmp(argv[1], "-i") != 0 && strcmp(argv[1], "-n") != 0) {
 		int y_copy;
+		// Read the 2 matrices from the given files
 		A = readArrayFromFile(argv[1], &x, &y);
 		B = readArrayFromFile(argv[2], &y_copy, &z);
+		
+		printArray(A,x,y);
+		printf("=======================================\n\n\n\n\n\n\n\n\n\n");
+		printArray(B,y,z);
+
+		printf("x = %d\ty = %d\tz = %d\n", x, y, z);
 		debug_print("x = %d\ty = %d\tz = %d\n", x, y, z);
+
+		// Check that the dimensions match
 		if(y_copy != y) {
 			printf("x = %d\ty = %d\ty_copy = %d\tz = %d\n", x, y, y_copy, z);
 		 	printf("Cannot multiply the 2 matrices");
@@ -267,71 +324,109 @@ int main(int argc, char *argv[]) {
 		int choice;
 		printf("Which type of function do you wish to apply:\n1- Non threaded\n2- Thread per element\n3- Thread per row\n");
 		scanf("%d", &choice);
+
 		double startTime, endTime, timeElapsed;
 		int num_threads;
 		time_t t;
+		
 		C = createArray(x, z);
+		
+		// Call the chosen function and calculate the time taken
 		startTime = (float)clock()/CLOCKS_PER_SEC;
 		num_threads = funcs[choice - 1]();
 		endTime = (float)clock()/CLOCKS_PER_SEC;
+		
 		printf("\n");
 		printArray(C, x, z);
 		printf("\n");
+
 		printf("Time elapsed: %.6lf secs\n", endTime - startTime);
 		printf("Number of threads created: %d\n", num_threads);
+		
+		// Save the matrix to the corresponding file
 		printArrayToFile(C, x, z, get_file_name(C));
 		
 		return 0;
 	}
 	else {
-		int iterations;
-		if(argc > 2 && strcmp("-b", argv[1]) == 0)
+		int iterations, n;
+		if(argc > 2 && strcmp("-i", argv[1]) == 0)
+		{
 			iterations = atoi(argv[2]);
-		else if(argc == 1)
+			if(argc > 4 && strcmp("-n", argv[3]) == 0)
+				n = atoi(argv[4]);
+			else
+				n = 2;
+		}
+		else if(argc > 2 && strcmp("-n", argv[1]) == 0)
+		{
+			n = atoi(argv[2]) / 2;
+			if(argc > 4 && strcmp("-i", argv[3]) == 0)
+				iterations = atoi(argv[4]);
+			else
 			iterations = 5;
+		}
+		else if(argc == 1) {
+			iterations = 5;
+			n = 2;
+		}
 		else
 		{
 			printf("Incorrect usage!\n");
 			return 0;
 		}
 		
-		FILE *fp = fopen("benchmark.txt", "w");
-		int n = 1;
+		FILE *fp = fopen("benchmark2.txt", "w");
 		x = y = z = n;
 		double startTime, endTime, timeElapsed;
 		time_t t;
 		srand((unsigned int)t);
 		file_name = getFileName(__FILE__);
-		int i;
-
-		for(i = 0;i < iterations;i++) {
-			n = 2 * n;		
+		int i, old_n = n;
+		for(i = 0;i < iterations;i++, n *= 2) {
+			
 			x = y = z = n;
+
+			// Free the currently allocated matrices
+			freeArray(A, old_n);
+			freeArray(B, old_n);
+			freeArray(C, old_n);
+			old_n = n;
+			
+			// Allocate memory for the matrices with the new dimension
 			A = createRandomArray(n, n);
 			B = createRandomArray(n, n);
 			C = createArray(n, n);
+
 			printf("Number of elements: %d\n\n", n * n);
+
 			startTime = (float)clock()/CLOCKS_PER_SEC;
 			int num_threads = nonThreadedMatMult();
 			endTime = (float)clock()/CLOCKS_PER_SEC;
-			double timeElapsed1 = endTime - startTime;
+			double timeElapsed1 = endTime - startTime;			
 			printf("Number of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed1);
+
 			startTime = (float)clock()/CLOCKS_PER_SEC;
 			num_threads = threadedMatMultPerElement();
 			endTime = (float)clock()/CLOCKS_PER_SEC;
 			double timeElapsed2 = endTime - startTime;
 			printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed2);
+			
 			startTime = (float)clock()/CLOCKS_PER_SEC;
 			num_threads = threadedMatMultPerRow();
 			endTime = (float)clock()/CLOCKS_PER_SEC;
 			double timeElapsed3 = endTime - startTime;
 			printf("\nNumber of threads created: %d\nTime Elapsed: %lf\n", num_threads, timeElapsed3);
+			
 			printf("============================================================================================\n");
+			
 			fprintf(fp, "%d,%.8lf,%.8lf,%0.8f\n", n, timeElapsed1, timeElapsed2, timeElapsed3);
+
+			
 		}
-		freeArray(A, n);
-		freeArray(B, n);
-		freeArray(C, n);
+		freeArray(A, old_n);
+		freeArray(B, old_n);
+		freeArray(C, old_n);
 		fclose(fp);
 	}
 	return 0;
