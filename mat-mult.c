@@ -126,18 +126,21 @@ int nonThreadedMatMult() {
  */
 int threadedMatMultPerElement() {
 	int i = 0, j = 0;
+	pthread_t **threads_arr = (pthread_t**)malloc(x * sizeof(pthread_t*));
 	for(i = 0;i < x;i++) {
+		threads_arr[i] = (pthread_t*)malloc(z * sizeof(pthread_t));
 		for(j= 0;j < z;j++) {
 			int *rowcol = (int*)malloc(2 * sizeof(int));
 			rowcol[0] = i;
 			rowcol[1] = j;
-			pthread_t tid;
 			pthread_attr_t attr;
 			pthread_attr_init(&attr);
-			pthread_create(&tid, &attr, calculateElement, rowcol);
-			pthread_join(tid, NULL);
+			pthread_create(&threads_arr[i][j], &attr, calculateElement, rowcol);
 		}
 	}
+	for(i = 0;i < x;i++)
+		for(j = 0;j < z;j++)
+			pthread_join(threads_arr[i][j], NULL);
 	return x * z;
 }
 
@@ -147,6 +150,7 @@ int threadedMatMultPerElement() {
  * returns number of created threads
  */
 int threadedMatMultPerRow() {
+	pthreads_t *pthreads_arr = malloc(x * sizeof(pthread_t));
 	int i = 0;
 	for(i = 0;i < x;i++) {
 		int *row = (int*)malloc(sizeof(int));
@@ -154,9 +158,10 @@ int threadedMatMultPerRow() {
 		pthread_t tid;
 		pthread_attr_t attr;
 		pthread_attr_init(&attr);
-		pthread_create(&tid, &attr, calculateRow, row);
-		pthread_join(tid, NULL);
+		pthread_create(&pthreads_arr[i], &attr, calculateRow, row);
 	}
+	for(i = 0;i < x; i++)
+		pthread_join(pthreads_arr[i], NULL);
 	return x;
 }
 

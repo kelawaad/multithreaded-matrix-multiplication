@@ -1,3 +1,6 @@
 *.txt
 .vscode/
 mat-mult
+*.png
+*.pdf
+*.docx
